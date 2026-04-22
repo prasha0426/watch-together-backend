@@ -6,7 +6,7 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
-// ✅ Health check route (important for Render)
+// ✅ Health check (for Render)
 app.get("/", (req, res) => {
   res.send("Server is running ✅");
 });
@@ -19,13 +19,27 @@ const io = new Server(server, {
   },
 });
 
+// 🔥 STORE USERS IN ROOMS
+const rooms = {};
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   // ✅ JOIN ROOM
   socket.on("join-room", (roomId) => {
     socket.join(roomId);
+
+    if (!rooms[roomId]) rooms[roomId] = [];
+
+    rooms[roomId].push(socket.id);
+
     console.log(`User ${socket.id} joined room ${roomId}`);
+
+    // 🔥 Send existing users to new user
+    socket.emit(
+      "all-users",
+      rooms[roomId].filter((id) => id !== socket.id)
+    );
   });
 
   // 💬 CHAT
@@ -46,18 +60,19 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("seek", time);
   });
 
-  // 🎥 VIDEO CALL (NEW FEATURE)
-  socket.on("peer-id", ({ roomId, peerId }) => {
-    socket.to(roomId).emit("peer-id", peerId);
-  });
+  // ❌ REMOVE peer-id logic (NOT NEEDED NOW)
 
-  // ❌ DISCONNECT
+  // ❌ CLEANUP ON DISCONNECT
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
+
+    for (let roomId in rooms) {
+      rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
+    }
   });
 });
 
-// ✅ PORT FIX FOR RENDER
+// ✅ PORT FIX
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
