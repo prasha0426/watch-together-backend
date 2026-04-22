@@ -6,7 +6,7 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
-// ✅ Health check (for Render)
+// ✅ Health check (important for Render)
 app.get("/", (req, res) => {
   res.send("Server is running ✅");
 });
@@ -19,7 +19,7 @@ const io = new Server(server, {
   },
 });
 
-// 🔥 STORE USERS IN ROOMS
+// 🔥 ROOM STORAGE (with Peer IDs)
 const rooms = {};
 
 io.on("connection", (socket) => {
@@ -31,15 +31,34 @@ io.on("connection", (socket) => {
 
     if (!rooms[roomId]) rooms[roomId] = [];
 
-    rooms[roomId].push(socket.id);
+    // Add user with empty peerId first
+    rooms[roomId].push({
+      socketId: socket.id,
+      peerId: null,
+    });
+
+    socket.roomId = roomId;
 
     console.log(`User ${socket.id} joined room ${roomId}`);
+  });
 
-    // 🔥 Send existing users to new user
-    socket.emit(
-      "all-users",
-      rooms[roomId].filter((id) => id !== socket.id)
-    );
+  // 🎥 RECEIVE PEER ID
+  socket.on("peer-id", ({ roomId, peerId }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    // Update peerId for this user
+    const user = room.find((u) => u.socketId === socket.id);
+    if (user) {
+      user.peerId = peerId;
+    }
+
+    // Send all valid peerIds to everyone
+    const peerIds = room
+      .map((u) => u.peerId)
+      .filter((id) => id !== null);
+
+    io.to(roomId).emit("all-peer-ids", peerIds);
   });
 
   // 💬 CHAT
@@ -60,19 +79,20 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("seek", time);
   });
 
-  // ❌ REMOVE peer-id logic (NOT NEEDED NOW)
-
-  // ❌ CLEANUP ON DISCONNECT
+  // ❌ DISCONNECT CLEANUP
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 
-    for (let roomId in rooms) {
-      rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
-    }
+    const roomId = socket.roomId;
+    if (!roomId || !rooms[roomId]) return;
+
+    rooms[roomId] = rooms[roomId].filter(
+      (u) => u.socketId !== socket.id
+    );
   });
 });
 
-// ✅ PORT FIX
+// ✅ PORT (Render compatible)
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
