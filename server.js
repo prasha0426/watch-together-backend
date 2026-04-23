@@ -13,9 +13,7 @@ app.get("/", (req, res) => {
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: "*" },
 });
 
 const rooms = {};
@@ -35,12 +33,11 @@ io.on("connection", (socket) => {
 
     socket.roomId = roomId;
 
-    // 🔥 Send existing peers immediately
-    const existingPeers = rooms[roomId]
+    const peers = rooms[roomId]
       .map((u) => u.peerId)
       .filter((id) => id !== null);
 
-    socket.emit("all-peer-ids", existingPeers);
+    socket.emit("all-peer-ids", peers);
   });
 
   socket.on("peer-id", ({ roomId, peerId }) => {
@@ -50,11 +47,11 @@ io.on("connection", (socket) => {
     const user = room.find((u) => u.socketId === socket.id);
     if (user) user.peerId = peerId;
 
-    const peerIds = room
+    const peers = room
       .map((u) => u.peerId)
       .filter((id) => id !== null);
 
-    io.to(roomId).emit("all-peer-ids", peerIds);
+    io.to(roomId).emit("all-peer-ids", peers);
   });
 
   // 💬 CHAT
@@ -62,7 +59,7 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("chat-message", message);
   });
 
-  // 🎬 LOCAL VIDEO SYNC
+  // 🎬 SYNC
   socket.on("play", ({ roomId, time }) => {
     socket.to(roomId).emit("play", time);
   });
@@ -75,7 +72,7 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("seek", time);
   });
 
-  // 🎬 YOUTUBE SYNC
+  // 🎬 YOUTUBE
   socket.on("youtube-load", ({ roomId, videoId }) => {
     socket.to(roomId).emit("youtube-load", videoId);
   });
@@ -86,6 +83,28 @@ io.on("connection", (socket) => {
 
   socket.on("youtube-pause", (roomId) => {
     socket.to(roomId).emit("youtube-pause");
+  });
+
+  // 🔥 LEAVE ROOM
+  socket.on("leave-room", () => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+
+    socket.leave(roomId);
+
+    if (rooms[roomId]) {
+      rooms[roomId] = rooms[roomId].filter(
+        (u) => u.socketId !== socket.id
+      );
+
+      const peers = rooms[roomId]
+        .map((u) => u.peerId)
+        .filter((id) => id !== null);
+
+      io.to(roomId).emit("all-peer-ids", peers);
+    }
+
+    socket.roomId = null;
   });
 
   socket.on("disconnect", () => {
