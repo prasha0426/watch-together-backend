@@ -72,19 +72,22 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("seek", time);
   });
 
-  // 🎬 YOUTUBE
-  socket.on("youtube-load", ({ roomId, videoId }) => {
-    socket.to(roomId).emit("youtube-load", videoId);
-  });
+ // 🎬 YOUTUBE
+socket.on("youtube-load", ({ roomId, videoId }) => {
+  socket.to(roomId).emit("youtube-load", { videoId });
+});
 
-  socket.on("youtube-play", ({ roomId, time }) => {
-    socket.to(roomId).emit("youtube-play", time);
-  });
+socket.on("youtube-play", ({ roomId, time }) => {
+  socket.to(roomId).emit("youtube-play", time);
+});
 
-  socket.on("youtube-pause", (roomId) => {
-    socket.to(roomId).emit("youtube-pause");
-  });
+socket.on("youtube-pause", ({ roomId }) => {
+  socket.to(roomId).emit("youtube-pause");
+});
 
+socket.on("youtube-seek", ({ roomId, time }) => {
+  socket.to(roomId).emit("youtube-seek", time);
+});
   // 🔥 LEAVE ROOM
   socket.on("leave-room", () => {
     const roomId = socket.roomId;
